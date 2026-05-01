@@ -1,54 +1,37 @@
-name: "TheOfficialKim: Step-by-Step Deployer"
+name: "TheOfficialKim: Remote Terminal (1 Hour Session)"
 
 on:
   workflow_dispatch:
     inputs:
-      admin_password:
-        description: 'รหัสผ่าน Admin เมล'
-        required: true
-      domain:
-        description: 'โดเมนของคุณ'
+      crd_code:
+        description: 'วาง Code จาก Google Remote Desktop (Debian Linux)'
         required: true
 
 jobs:
-  prepare-vps:
+  remote-session:
     runs-on: ubuntu-22.04
     steps:
-      - name: 1. Prepare and Update VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: root
-          password: ${{ secrets.VPS_PASSWORD }}
-          script: |
-            echo "--- กำลังเตรียมเครื่อง VPS ---"
-            sudo apt-get update
-            sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-            echo "✅ เครื่องพร้อมแล้ว"
+      - name: Setup Chrome Remote Desktop & UI
+        run: |
+          # 1. อัปเดตและลง Desktop Environment (XFCE)
+          sudo apt update
+          sudo apt install --assume-yes xfce4 desktop-base dbus-x11 xscreensaver
 
-  install-mail:
-    needs: prepare-vps # รอให้เครื่องเตรียมเสร็จก่อน
-    runs-on: ubuntu-22.04
-    steps:
-      - name: 2. Start Terminal Installation
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: root
-          password: ${{ secrets.VPS_PASSWORD }}
-          script: |
-            echo "--- เริ่มกระบวนการติดตั้ง Mail-in-a-Box ---"
-            
-            # ตั้งค่าตัวแปร
-            export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain }}"
-            export EMAIL_ADDR="admin@${{ github.event.inputs.domain }}"
-            export EMAIL_PW="${{ github.event.inputs.admin_password }}"
-            export NONINTERACTIVE=1
+          # 2. ลง Chrome Remote Desktop
+          wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+          sudo apt install --assume-yes ./chrome-remote-desktop_current_amd64.deb
 
-            # รันสคริปต์ติดตั้ง
-            curl -s https://mailinabox.email/setup.sh | sudo -E bash
-            
-            echo "===================================================="
-            echo "✅ ติดตั้งสำเร็จโดย TheOfficialKim"
-            echo "ตรวจสอบ DNS ได้ที่หน้า Admin ของคุณ"
-            echo "===================================================="
+          # 3. รันคำสั่งเชื่อมต่อที่คุณก๊อปมาจาก Google
+          ${{ github.event.inputs.crd_code }} --pin=123456
+
+      - name: Keep Online for 1 Hour
+        run: |
+          echo "===================================================="
+          echo "🚀 เครื่องออนไลน์แล้ว! รีโมทเข้าไปจัดการได้เลย"
+          echo "เวลาจะนับถอยหลัง 60 นาที นับตั้งแต่ตอนนี้..."
+          echo "===================================================="
+          
+          # สั่งให้เครื่องรอเป็นเวลา 3600 วินาที (1 ชั่วโมง)
+          sleep 3600
+          
+          echo "หมดเวลา 1 ชั่วโมงแล้ว ปิดเครื่องอัตโนมัติ"
