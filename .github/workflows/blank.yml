@@ -1,45 +1,46 @@
-name: "TheOfficialKim: Auto Mail-in-a-Box (No IP Input)"
+name: "TheOfficialKim: Auto Mail-in-a-Box (Version Fixed)"
 
 on:
   workflow_dispatch:
     inputs:
       admin_password:
-        description: 'ตั้งรหัสผ่าน Admin เมล'
+        description: 'รหัสผ่าน Admin เมล'
         required: true
       domain:
-        description: 'โดเมนของคุณ (เช่น yourdomain.com)'
+        description: 'โดเมน (เช่น yourdomain.com)'
         required: true
 
 jobs:
   terminal-job:
-    runs-on: ubuntu-latest
+    # เปลี่ยนจาก latest เป็น 22.04 เพื่อให้สภาพแวดล้อมตรงกับ VPS
+    runs-on: ubuntu-22.04 
+    
     steps:
-      - name: SSH and Auto Install
+      - name: SSH and Auto Install on VPS
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.VPS_IP }}        # ดึง IP จาก Secrets อัตโนมัติ
+          host: ${{ secrets.VPS_IP }}
           username: root
-          password: ${{ secrets.VPS_PASSWORD }} # ดึงรหัสผ่าน VPS จาก Secrets อัตโนมัติ
+          password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            # 1. ตั้งค่าข้อมูลอัตโนมัติ
+            # เช็คเวอร์ชันเครื่องปลายทาง (VPS)
+            echo "Checking VPS OS Version..."
+            lsb_release -a
+
+            # ตั้งค่าตัวแปร (Non-interactive)
             export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain }}"
             export EMAIL_ADDR="admin@${{ github.event.inputs.domain }}"
             export EMAIL_PW="${{ github.event.inputs.admin_password }}"
             export NONINTERACTIVE=1
 
-            # 2. สั่งรันการติดตั้งใน VPS
+            # อัปเดตและลง Mail-in-a-Box
             sudo apt-get update
+            # ใช้คำสั่งติดตั้งที่เจาะจงสคริปต์ล่าสุดของ 22.04
             curl -s https://mailinabox.email/setup.sh | sudo -E bash
 
-            # 3. แสดงค่า DNS ออกมาที่หน้าจอ GitHub Actions
+            # สรุปค่า DNS หลังติดตั้งเสร็จ
             echo "===================================================="
-            echo "✅ ติดตั้งสำเร็จโดย TheOfficialKim"
-            echo "===================================================="
-            echo "ให้นำค่าเหล่านี้ไปใส่ใน Cloudflare DNS (เมฆสีเทา):"
-            echo ""
-            echo "Type: A  | Name: box | Value: $(curl -s ifconfig.me)"
-            echo "Type: MX | Name: @   | Value: box.${{ github.event.inputs.domain }} | Priority: 10"
-            echo "Type: TXT| Name: @   | Value: v=spf1 mx -all"
-            echo ""
-            echo "Login ที่: https://box.${{ github.event.inputs.domain }}/admin"
+            echo "✅ DONE BY TheOfficialKim"
+            echo "DNS A Record: box -> $(curl -s ifconfig.me)"
+            echo "DNS MX Record: @ -> box.${{ github.event.inputs.domain }}"
             echo "===================================================="
