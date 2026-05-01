@@ -1,28 +1,67 @@
-name: Setup Chrome Remote Desktop
+name: "TheOfficialKim: Ultimate Mail-in-a-Box Deployer"
 
-# ส่วนนี้จะสร้างปุ่มกด และช่องให้ใส่ Code ในหน้า GitHub Actions
 on:
   workflow_dispatch:
     inputs:
-      crd_code:
-        description: 'วาง Code จาก Google Chrome Remote Desktop (ที่ก๊อปมา)'
+      vps_host:
+        description: 'IP ของ VPS (Ubuntu)'
         required: true
-        default: ''
+      cloudflare_token:
+        description: 'Cloudflare Tunnel Token'
+        required: true
+      admin_email:
+        description: 'อีเมลแอดมิน (เช่น admin@yourdomain.com)'
+        required: true
+      admin_password:
+        description: 'รหัสผ่านหน้า Admin'
+        required: true
+      domain_name:
+        description: 'ชื่อโดเมนหลัก (เช่น yourdomain.com)'
+        required: true
 
 jobs:
-  setup:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Remote Desktop
-        run: |
-          # ติดตั้งส่วนประกอบที่จำเป็น
-          sudo apt update
-          wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-          sudo apt install --assume-yes ./chrome-remote-desktop_current_amd64.deb
-          sudo apt install --assume-yes xfce4 desktop-base dbus-x11
-          
-          # รัน Code ที่คุณกรอกลงในช่อง input
-          ${{ github.event.inputs.crd_code }} --pin=123456
-          
-          echo "ติดตั้งเสร็จแล้ว! เช็คสถานะในหน้า Chrome Remote Desktop ได้เลย"
-          echo "Made By TheOfficialKim"
+      - name: SSH and Full Setup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ github.event.inputs.vps_host }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            # 1. ตั้งค่าตัวแปร (Non-interactive)
+            export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain_name }}"
+            export EMAIL_ADDR="${{ github.event.inputs.admin_email }}"
+            export EMAIL_PW="${{ github.event.inputs.admin_password }}"
+            export NONINTERACTIVE=1
+
+            # 2. ติดตั้ง Mail-in-a-Box
+            sudo apt-get update
+            curl -s https://mailinabox.email/setup.sh | sudo -E bash
+
+            # 3. ติดตั้ง Cloudflare Tunnel
+            if ! command -v cloudflared &> /dev/null; then
+              wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+              sudo dpkg -i cloudflared-linux-amd64.deb
+            fi
+            sudo screen -dmS mail-tunnel cloudflared tunnel --no-autoupdate run --token ${{ github.event.inputs.cloudflare_token }}
+
+            # 4. แสดงค่า DNS ที่ต้องเอาไปใส่ใน Cloudflare (เมฆเทาเท่านั้น!)
+            echo "------------------------------------------------"
+            echo "🚀 INSTALLATION COMPLETE BY TheOfficialKim"
+            echo "------------------------------------------------"
+            echo "COPY THESE RECORDS TO CLOUDFLARE DNS (PROXY OFF/GREY CLOUD):"
+            echo ""
+            echo "1. A Record:"
+            echo "   Name: box | Content: ${{ github.event.inputs.vps_host }}"
+            echo ""
+            echo "2. MX Record:"
+            echo "   Name: @ | Content: box.${{ github.event.inputs.domain_name }} | Priority: 10"
+            echo ""
+            echo "3. TXT (SPF):"
+            echo "   Name: @ | Content: v=spf1 mx -all"
+            echo ""
+            echo "4. TXT (DKIM/DMARC):"
+            echo "   คุณสามารถดูค่าเต็มได้ที่ https://box.${{ github.event.inputs.domain_name }}/admin"
+            echo "------------------------------------------------"
