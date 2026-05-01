@@ -1,4 +1,4 @@
-name: "TheOfficialKim: Auto Mail-in-a-Box (Version Fixed)"
+name: "TheOfficialKim: Debug & Auto Setup"
 
 on:
   workflow_dispatch:
@@ -12,35 +12,38 @@ on:
 
 jobs:
   terminal-job:
-    # เปลี่ยนจาก latest เป็น 22.04 เพื่อให้สภาพแวดล้อมตรงกับ VPS
     runs-on: ubuntu-22.04 
-    
     steps:
-      - name: SSH and Auto Install on VPS
+      - name: SSH and Auto Install
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
+          # เพิ่ม Timeout เผื่อกรณีเครื่องประมวลผลช้า
+          command_timeout: 30m 
           script: |
-            # เช็คเวอร์ชันเครื่องปลายทาง (VPS)
-            echo "Checking VPS OS Version..."
-            lsb_release -a
+            # 1. ปิด Process ที่ค้างอยู่ (แก้ปัญหา Apt Lock ที่พบบ่อย)
+            sudo killall apt apt-get || true
+            sudo rm /var/lib/apt/lists/lock || true
+            sudo rm /var/cache/apt/archives/lock || true
+            sudo rm /var/lib/dpkg/lock* || true
+            sudo dpkg --configure -a
 
-            # ตั้งค่าตัวแปร (Non-interactive)
+            # 2. ตั้งค่าตัวแปร
             export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain }}"
             export EMAIL_ADDR="admin@${{ github.event.inputs.domain }}"
             export EMAIL_PW="${{ github.event.inputs.admin_password }}"
             export NONINTERACTIVE=1
 
-            # อัปเดตและลง Mail-in-a-Box
-            sudo apt-get update
-            # ใช้คำสั่งติดตั้งที่เจาะจงสคริปต์ล่าสุดของ 22.04
-            curl -s https://mailinabox.email/setup.sh | sudo -E bash
-
-            # สรุปค่า DNS หลังติดตั้งเสร็จ
-            echo "===================================================="
-            echo "✅ DONE BY TheOfficialKim"
-            echo "DNS A Record: box -> $(curl -s ifconfig.me)"
-            echo "DNS MX Record: @ -> box.${{ github.event.inputs.domain }}"
-            echo "===================================================="
+            # 3. ลองรันการติดตั้งและดัก Error
+            echo "Starting installation..."
+            if curl -s https://mailinabox.email/setup.sh | sudo -E bash; then
+                echo "===================================================="
+                echo "✅ SUCCESS BY TheOfficialKim"
+                echo "A Record: box -> $(curl -s ifconfig.me)"
+                echo "===================================================="
+            else
+                echo "❌ Installation Failed! เช็คสาเหตุด้านบน"
+                exit 1
+            fi
