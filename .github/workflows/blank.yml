@@ -1,67 +1,45 @@
-name: "TheOfficialKim: Ultimate Mail-in-a-Box Deployer"
+name: "TheOfficialKim: Auto Mail-in-a-Box (No IP Input)"
 
 on:
   workflow_dispatch:
     inputs:
-      vps_host:
-        description: 'IP ของ VPS (Ubuntu)'
-        required: true
-      cloudflare_token:
-        description: 'Cloudflare Tunnel Token'
-        required: true
-      admin_email:
-        description: 'อีเมลแอดมิน (เช่น admin@yourdomain.com)'
-        required: true
       admin_password:
-        description: 'รหัสผ่านหน้า Admin'
+        description: 'ตั้งรหัสผ่าน Admin เมล'
         required: true
-      domain_name:
-        description: 'ชื่อโดเมนหลัก (เช่น yourdomain.com)'
+      domain:
+        description: 'โดเมนของคุณ (เช่น yourdomain.com)'
         required: true
 
 jobs:
-  deploy:
+  terminal-job:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH and Full Setup
+      - name: SSH and Auto Install
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ github.event.inputs.vps_host }}
+          host: ${{ secrets.VPS_IP }}        # ดึง IP จาก Secrets อัตโนมัติ
           username: root
-          password: ${{ secrets.VPS_PASSWORD }}
+          password: ${{ secrets.VPS_PASSWORD }} # ดึงรหัสผ่าน VPS จาก Secrets อัตโนมัติ
           script: |
-            # 1. ตั้งค่าตัวแปร (Non-interactive)
-            export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain_name }}"
-            export EMAIL_ADDR="${{ github.event.inputs.admin_email }}"
+            # 1. ตั้งค่าข้อมูลอัตโนมัติ
+            export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain }}"
+            export EMAIL_ADDR="admin@${{ github.event.inputs.domain }}"
             export EMAIL_PW="${{ github.event.inputs.admin_password }}"
             export NONINTERACTIVE=1
 
-            # 2. ติดตั้ง Mail-in-a-Box
+            # 2. สั่งรันการติดตั้งใน VPS
             sudo apt-get update
             curl -s https://mailinabox.email/setup.sh | sudo -E bash
 
-            # 3. ติดตั้ง Cloudflare Tunnel
-            if ! command -v cloudflared &> /dev/null; then
-              wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-              sudo dpkg -i cloudflared-linux-amd64.deb
-            fi
-            sudo screen -dmS mail-tunnel cloudflared tunnel --no-autoupdate run --token ${{ github.event.inputs.cloudflare_token }}
-
-            # 4. แสดงค่า DNS ที่ต้องเอาไปใส่ใน Cloudflare (เมฆเทาเท่านั้น!)
-            echo "------------------------------------------------"
-            echo "🚀 INSTALLATION COMPLETE BY TheOfficialKim"
-            echo "------------------------------------------------"
-            echo "COPY THESE RECORDS TO CLOUDFLARE DNS (PROXY OFF/GREY CLOUD):"
+            # 3. แสดงค่า DNS ออกมาที่หน้าจอ GitHub Actions
+            echo "===================================================="
+            echo "✅ ติดตั้งสำเร็จโดย TheOfficialKim"
+            echo "===================================================="
+            echo "ให้นำค่าเหล่านี้ไปใส่ใน Cloudflare DNS (เมฆสีเทา):"
             echo ""
-            echo "1. A Record:"
-            echo "   Name: box | Content: ${{ github.event.inputs.vps_host }}"
+            echo "Type: A  | Name: box | Value: $(curl -s ifconfig.me)"
+            echo "Type: MX | Name: @   | Value: box.${{ github.event.inputs.domain }} | Priority: 10"
+            echo "Type: TXT| Name: @   | Value: v=spf1 mx -all"
             echo ""
-            echo "2. MX Record:"
-            echo "   Name: @ | Content: box.${{ github.event.inputs.domain_name }} | Priority: 10"
-            echo ""
-            echo "3. TXT (SPF):"
-            echo "   Name: @ | Content: v=spf1 mx -all"
-            echo ""
-            echo "4. TXT (DKIM/DMARC):"
-            echo "   คุณสามารถดูค่าเต็มได้ที่ https://box.${{ github.event.inputs.domain_name }}/admin"
-            echo "------------------------------------------------"
+            echo "Login ที่: https://box.${{ github.event.inputs.domain }}/admin"
+            echo "===================================================="
