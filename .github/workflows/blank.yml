@@ -1,4 +1,4 @@
-name: "TheOfficialKim: Debug & Auto Setup"
+name: "TheOfficialKim: Step-by-Step Deployer"
 
 on:
   workflow_dispatch:
@@ -7,43 +7,48 @@ on:
         description: 'รหัสผ่าน Admin เมล'
         required: true
       domain:
-        description: 'โดเมน (เช่น yourdomain.com)'
+        description: 'โดเมนของคุณ'
         required: true
 
 jobs:
-  terminal-job:
-    runs-on: ubuntu-22.04 
+  prepare-vps:
+    runs-on: ubuntu-22.04
     steps:
-      - name: SSH and Auto Install
+      - name: 1. Prepare and Update VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_IP }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
-          # เพิ่ม Timeout เผื่อกรณีเครื่องประมวลผลช้า
-          command_timeout: 30m 
           script: |
-            # 1. ปิด Process ที่ค้างอยู่ (แก้ปัญหา Apt Lock ที่พบบ่อย)
-            sudo killall apt apt-get || true
-            sudo rm /var/lib/apt/lists/lock || true
-            sudo rm /var/cache/apt/archives/lock || true
-            sudo rm /var/lib/dpkg/lock* || true
-            sudo dpkg --configure -a
+            echo "--- กำลังเตรียมเครื่อง VPS ---"
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+            echo "✅ เครื่องพร้อมแล้ว"
 
-            # 2. ตั้งค่าตัวแปร
+  install-mail:
+    needs: prepare-vps # รอให้เครื่องเตรียมเสร็จก่อน
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 2. Start Terminal Installation
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            echo "--- เริ่มกระบวนการติดตั้ง Mail-in-a-Box ---"
+            
+            # ตั้งค่าตัวแปร
             export PRIMARY_HOSTNAME="box.${{ github.event.inputs.domain }}"
             export EMAIL_ADDR="admin@${{ github.event.inputs.domain }}"
             export EMAIL_PW="${{ github.event.inputs.admin_password }}"
             export NONINTERACTIVE=1
 
-            # 3. ลองรันการติดตั้งและดัก Error
-            echo "Starting installation..."
-            if curl -s https://mailinabox.email/setup.sh | sudo -E bash; then
-                echo "===================================================="
-                echo "✅ SUCCESS BY TheOfficialKim"
-                echo "A Record: box -> $(curl -s ifconfig.me)"
-                echo "===================================================="
-            else
-                echo "❌ Installation Failed! เช็คสาเหตุด้านบน"
-                exit 1
-            fi
+            # รันสคริปต์ติดตั้ง
+            curl -s https://mailinabox.email/setup.sh | sudo -E bash
+            
+            echo "===================================================="
+            echo "✅ ติดตั้งสำเร็จโดย TheOfficialKim"
+            echo "ตรวจสอบ DNS ได้ที่หน้า Admin ของคุณ"
+            echo "===================================================="
