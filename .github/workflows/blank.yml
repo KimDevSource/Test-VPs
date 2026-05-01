@@ -1,0 +1,13 @@
+name: Setup Remote Desktop
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install CRD
+        run: |
+          sudo apt update
+          sudo apt install --assume-yes chrome-remote-desktop_current_amd64.deb
+          # วาง Code ที่ก๊อปมาจาก Google ตรงนี้
+          ${{ secrets.CHROME_REMOTE_CODE }} 
